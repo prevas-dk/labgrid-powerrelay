@@ -1,0 +1,21 @@
+#
+# HTTP
+#
+host: 0.0.0.0
+port: 80
+
+#
+# Relay mapping
+#
+relays:
+  - id: 0
+    chip: 0
+    line: 1
+    active: high
+    default: 1
+
+  - id: 1
+    chip: 1
+    line: 1
+    active: low
+    default: 0
