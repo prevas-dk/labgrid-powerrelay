@@ -27,7 +27,7 @@ CONFIG_TRAFARET = t.Dict(
             t.Dict(
                 {
                     t.Key("id"): t.Int(),
-                    t.Key("chip"): t.Int(),
+                    t.Key("chip"): t.String(),
                     t.Key("line"): t.Int(),
                     t.Key("active"): t.String(),
                     t.Key("default"): t.Int(),
