@@ -16,7 +16,7 @@ from aiohttp import web
 import aiohttp_jinja2
 import jinja2
 
-from powerrelay.drivers import dummy, GPIOLineInUsedError, GPIOInvalidLineError
+from powerrelay.drivers import libgpiod, GPIOLineInUsedError, GPIOInvalidLineError
 from . import routes, middleware
 
 CONFIG_TRAFARET = t.Dict(
@@ -116,20 +116,21 @@ def run(config):
         aiohttp_jinja2.setup(app, loader=jinja2.PackageLoader('powerrelay','views'))
 
         # setup gpio chips
+        gpio_instances = dict()
         chips = set()
         for relay_mapping in mapping:
             for key, value in relay_mapping.items():
                 if key == 'chip':
                     chips.add(value)
-        gpio_instance = dummy.GPIO(chips)
+                    gpio_instances[value] = libgpiod.GPIO(value)
 
         # set lines to output
         for relay_mapping in mapping:
             initial_value = 1 if relay_mapping["active"] == "high" else 0
-            gpio_instance.output(relay_mapping["chip"], relay_mapping["line"], initial_value)
+            gpio_instances.get(relay_mapping["chip"]).output(relay_mapping["line"], initial_value)
 
         # setup views and routes
-        routes.setup_routes(app, gpio_instance, mapping)
+        routes.setup_routes(app, gpio_instances, mapping)
         middleware.setup_middleware(app)
 
         web.run_app(app, host=host, port=port)

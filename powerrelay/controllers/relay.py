@@ -31,7 +31,7 @@ class RelayController:
         """
         relays = []
         for relay in self.mapping:
-            relay_value = self.gpio.value(relay['chip'], relay['line'])
+            relay_value = self.gpio.get(relay['chip']).value(relay['line'])
             relays.append({'id': relay['id'], 'state': RelayController.relay_status(relay,relay_value)})
 
         return web.json_response(relays)
@@ -52,7 +52,7 @@ class RelayController:
             if relay_mapped == None:
                 return web.HTTPError()
 
-            relay_value = self.gpio.value(relay_mapped['chip'],relay_mapped['line'])
+            relay_value = self.gpio.get(relay_mapped['chip']).value(relay_mapped['line'])
             res = {"relay_id": relay,
                    "status": RelayController.relay_status(relay_mapped,relay_value)
             }
@@ -70,7 +70,7 @@ class RelayController:
             if relay_mapped == None:
                 return web.HTTPError()
 
-            relay_value = self.gpio.value(relay_mapped['chip'],relay_mapped['line'])
+            relay_value = self.gpio.get(relay_mapped['chip']).value(relay_mapped['line'])
             return web.json_response({"state": RelayController.relay_status(relay_mapped,relay_value)})
 
         except ValueError:
@@ -96,8 +96,8 @@ class RelayController:
             return web.HTTPError()
 
         if relay_mapped['active'] == 'high':
-            self.gpio.output(relay_mapped['chip'],relay_mapped['line'], HIGH if state_in else LOW)
+            self.gpio.get(relay_mapped['chip']).output(relay_mapped['line'], HIGH if state_in else LOW)
         elif relay_mapped['active'] == 'low':
-            self.gpio.output(relay_mapped['chip'],relay_mapped['line'], LOW if state_in else HIGH)
+            self.gpio.get(relay_mapped['chip']).output(relay_mapped['line'], LOW if state_in else HIGH)
 
         return web.json_response({"status": "ok"})
