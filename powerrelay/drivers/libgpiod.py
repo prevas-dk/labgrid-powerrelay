@@ -139,7 +139,9 @@ class GPIO(BaseGPIO):
     def output(self, line, value):
         """Set the specified line the provided high/low value.  Value should be
         either HIGH/LOW or a boolean (true = high)."""
-        raise NotImplementedError
+        line = chip_get_line(self.chip, line)
+        line_request_output(line, self.chipname.encode('utf-8'), 0)
+        line_set_value(line, value)
 
     def input(self, line):
         """Read the specified line and return HIGH/true if the line is pulled high,
@@ -172,4 +174,5 @@ class GPIO(BaseGPIO):
 
     def value(self,line):
         """Return the current value of the line"""
-        raise NotImplementedError
+        line = chip_get_line(self.chip, line)
+        return line_get_value(line)
