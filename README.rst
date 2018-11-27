@@ -2,6 +2,8 @@
 PowerRelay
 ========
 
+|license| |build-status|
+
 REST API to control GPIO chips
 
 
@@ -92,3 +94,10 @@ API
   * **Code:** 200
     **Content:** `{"status": "ok"}`
 
+.. |license| image:: https://img.shields.io/badge/license-MIT-blue.svg
+    :alt: MIT
+    :target: https://raw.githubusercontent.com/prevas-dk/labgrid-powerrelay/master/LICENSE
+
+.. |build-status| image:: https://travis-ci.com/prevas-dk/labgrid-powerrelay.svg?branch=master
+    :alt: build status
+    :target: https://travis-ci.com/prevas-dk/labgrid-powerrelay
