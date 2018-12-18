@@ -55,6 +55,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     setup_requires=setup_requirements,
-    data_files=[('/etc/',['config.yaml'])],
+    data_files=[('/etc/powerrelay/',['config.yaml'])],
     package_data={'powerrelay.views': ['*.j2']},
 )
