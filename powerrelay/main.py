@@ -126,8 +126,10 @@ def run(config):
 
         # set lines to output
         for relay_mapping in mapping:
-            initial_value = 1 if relay_mapping["active"] == "high" else 0
-            gpio_instances.get(relay_mapping["chip"]).output(relay_mapping["line"], initial_value)
+            chip = relay_mapping['chip']
+            line = relay_mapping['line']
+            default = relay_mapping['default']
+            gpio_instances.get(chip).output(line, default)
 
         # setup views and routes
         routes.setup_routes(app, gpio_instances, mapping)
