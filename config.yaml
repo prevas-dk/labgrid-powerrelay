@@ -8,14 +8,14 @@ port: 80
 # Relay mapping
 #
 relays:
-  - id: 0
+  "0":
     chip: gpiochip1
-    line: 1
+    line: 0
     active: high
     default: 1
 
-  - id: 1
-    chip: gpiochip1
-    line: 1
+  "1":
+    name: "RELAY1"
     active: low
     default: 0
+
