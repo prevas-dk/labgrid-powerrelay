@@ -27,12 +27,12 @@ test_requirements = [
 
 setup(
     name='powerrelay',
-    version='0.1.0',
+    version='0.2.0',
     description="REST API to control power relays.",
     long_description=readme + '\n\n' + history,
-    author="Henrik Nymann Jensen",
-    author_email='hnje@prevas.dk',
-    url='https://github.com/prevas-hnje/powerrelay',
+    author="Rasmus Villemoes",
+    author_email='ravi@prevas.dk',
+    url='https://github.com/prevas-dk/labgrid-powerrelay',
     packages=find_packages(),
     entry_points={
         'console_scripts': [
@@ -56,5 +56,4 @@ setup(
     tests_require=test_requirements,
     setup_requires=setup_requirements,
     data_files=[('/etc/powerrelay/',['config.yaml'])],
-    package_data={'powerrelay.views': ['*.j2']},
 )

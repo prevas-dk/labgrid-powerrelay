@@ -6,8 +6,8 @@ PROJECT_ROOT = pathlib.Path(__file__).parent
 #
 # Global routes setup
 #
-def setup_routes(app, gpio, mapping):
-    relaycontroller = RelayController(gpio, mapping)
+def setup_routes(app, lines):
+    relaycontroller = RelayController(lines)
     app.router.add_get('/relays/', relaycontroller.relays)
     app.router.add_get('/relays/count', relaycontroller.num_relays)
     app.router.add_get('/relays/{relay}', relaycontroller.status)

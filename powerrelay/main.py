@@ -4,10 +4,18 @@
     Main module.
 """
 
+# Note for future self: To run this directly on target during
+# development without going through all the setuptools yoga and
+# getting stuff installed in the right places, one can just scp the
+# whole tree and then do
+#
+#   python3 -m powerrelay.main run ./config.yaml
+
 import sys
 import asyncio
 import logging
 import click
+import errno
 
 import trafaret_config as traf_cfg
 import trafaret as t
@@ -16,21 +24,23 @@ from aiohttp import web
 import aiohttp_jinja2
 import jinja2
 
-from powerrelay.drivers import libgpiod, GPIOLineInUsedError, GPIOInvalidLineError
-from . import routes, middleware
+import gpiod
+
+from . import routes
 
 CONFIG_TRAFARET = t.Dict(
     {
         t.Key("host"): t.String(),
         t.Key("port"): t.Int(),
-        t.Key("relays"): t.List(
+        t.Key("relays"): t.Mapping(
+            t.String(),
             t.Dict(
                 {
-                    t.Key("id"): t.Int(),
-                    t.Key("chip"): t.String(),
-                    t.Key("line"): t.Int(),
-                    t.Key("active"): t.String(),
-                    t.Key("default"): t.Int(),
+                    t.Key("chip", optional=True): t.String(),
+                    t.Key("line", optional=True): t.Int(),
+                    t.Key("name", optional=True): t.String(),
+                    t.Key("active", optional=True, default='high'): t.Enum('high', 'low'),
+                    t.Key("default", optional=True, default=0): t.Int(),
                 }
             )
         ),
@@ -56,25 +66,64 @@ class TrafaretYaml(click.Path):
             msg = "\n".join(str(err) for err in e.errors)
             self.fail("\n" + msg)
 
-def unique_list(var):
-    """
-        Returns true if the list is unique.
-    """
-    return len([x for x in set(var)]) == len(var)
 
-def validate_relays(mapping):
+def validate_relays(relays):
     """
-        Validate that we dont have any duplicates
+        Validate that each relay specifies either chip,line or name
     """
-    if not unique_list([ x['id'] for x in mapping ]):
-        return (False, "relay id's not unique")
-
-    chip_lines = [ (x['chip'],x['line']) for x in mapping ]
-    for idx, val in enumerate(chip_lines):
-        if chip_lines[idx] in chip_lines[idx+1:]:
-            return (False, "relay chip,line duplication")
-
+    for ident,cfg in relays.items():
+        has_chip_line = "chip" in cfg and "line" in cfg
+        has_name = "name" in cfg
+        if has_chip_line and has_name:
+            return (False, "Relay %s: cannot specify both GPIO name and chip name+line number" % ident)
+        if not has_chip_line and not has_name:
+            return (False, "Relay %s: must specify either GPIO name or chip name+line number" % ident)
     return (True, None)
+
+# Unfortunately, the python bindings for libgpiod have slightly
+# inconsistent way of reporting errors:
+#
+# - Looking up a line by name return None if there's no such line.
+#
+# - Looking up a non-existent chip raises ENOENT.
+#
+# - Asking for a non-existent line from a gpiod.Chip raises EINVAL.
+#
+# Try to normalize all these cases to ENOENT aka FileNotFoundError,
+# and put some reasonable stuff in the exception object's strerror.
+def cfg_to_line(cfg):
+    if 'name' in cfg:
+        name = cfg['name']
+        line = gpiod.find_line(name)
+        if not line:
+            raise FileNotFoundError(errno.ENOENT, "No such GPIO line", name)
+    else:
+        try:
+            chip = gpiod.Chip(cfg['chip'], gpiod.Chip.OPEN_LOOKUP)
+            line = chip.get_line(cfg['line'])
+        except FileNotFoundError as e:
+            e.strerror = "No such GPIO chip"
+            e.filename = cfg['chip']
+            raise e
+        except OSError as e:
+            if e.errno == errno.EINVAL:
+                raise FileNotFoundError(errno.ENOENT, "GPIO chip '%s' has no line %d" %
+                                        (cfg['chip'], cfg['line']))
+            raise e
+    return line
+
+# I'm tired of my terminal getting messed up when testing using 'curl -v -X GET ...'
+@web.middleware
+async def terminate_exception_body_by_newline(request, handler):
+    try:
+        response = await handler(request)
+        return response
+    except web.HTTPException as ex:
+        text = ex.text
+        if isinstance(text, str):
+            if not text.endswith("\n"):
+                ex.text = text + "\n"
+        raise ex
 
 @click.group()
 def powerrelay():
@@ -101,46 +150,41 @@ def run(config):
     try:
         host = config["host"]
         port = config["port"]
-        mapping = config["relays"]
+        relays = config["relays"]
 
         # validate relay mapping
-        validate_relays(mapping)
+        validate_relays(relays)
 
         logging.basicConfig(level=logging.ERROR)
-        loop = asyncio.get_event_loop()
 
         # setup application and extensions
-        app = web.Application(loop=loop)
+        app = web.Application(middlewares=[terminate_exception_body_by_newline])
 
         # setup jinja template
         aiohttp_jinja2.setup(app, loader=jinja2.PackageLoader('powerrelay','views'))
 
-        # setup gpio chips
-        gpio_instances = dict()
-        chips = set()
-        for relay_mapping in mapping:
-            for key, value in relay_mapping.items():
-                if key == 'chip':
-                    chips.add(value)
-                    gpio_instances[value] = libgpiod.GPIO(value)
+        # setup gpio line instances
+        lines = dict()
+        for ident,cfg in relays.items():
+            line = cfg_to_line(cfg)
+            flags = 0
+            if cfg['active'] == 'low':
+                flags |= gpiod.LINE_REQ_FLAG_ACTIVE_LOW
+            line.request(consumer="PowerRelay", type=gpiod.LINE_REQ_DIR_OUT, flags=flags)
+            lines[ident] = line
 
-        # set lines to output
-        for relay_mapping in mapping:
-            chip = relay_mapping['chip']
-            line = relay_mapping['line']
-            default = relay_mapping['default']
-            gpio_instances.get(chip).output(line, default)
+        # Only set the defaults when we've succesfully requested all lines.
+        for ident in lines:
+            lines[ident].set_value(relays[ident]['default'])
 
-        # setup views and routes
-        routes.setup_routes(app, gpio_instances, mapping)
-        middleware.setup_middleware(app)
+        # setup routes
+        routes.setup_routes(app, lines)
 
         web.run_app(app, host=host, port=port)
 
-    except GPIOInvalidLineError as ex:
-        pass
-    except GPIOLineInUsedError as ex:
-        pass
+    except OSError as ex:
+        print(str(ex), file=sys.stderr)
+        sys.exit(1)
     except traf_cfg.ConfigError as ex:
         ex.output()
         sys.exit(1)
