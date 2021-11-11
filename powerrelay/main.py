@@ -21,8 +21,6 @@ import trafaret_config as traf_cfg
 import trafaret as t
 
 from aiohttp import web
-import aiohttp_jinja2
-import jinja2
 
 import gpiod
 
@@ -159,9 +157,6 @@ def run(config):
 
         # setup application and extensions
         app = web.Application(middlewares=[terminate_exception_body_by_newline])
-
-        # setup jinja template
-        aiohttp_jinja2.setup(app, loader=jinja2.PackageLoader('powerrelay','views'))
 
         # setup gpio line instances
         lines = dict()
