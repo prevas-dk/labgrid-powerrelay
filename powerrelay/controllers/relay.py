@@ -62,7 +62,7 @@ class RelayController:
                "status": str(value)}
         return self.json_response(res)
 
-    async def get_state(self,request):
+    async def get_state_old(self,request):
         """
             Relay get value
         """
@@ -72,7 +72,18 @@ class RelayController:
 
         return self.json_response({"state": str(line.get_value())})
 
-    async def set_state(self,request):
+    async def get_state(self,request):
+        """
+            Relay get value
+        """
+        import sys
+        ident = request.match_info['relay']
+        line = self.lookup_line(ident)
+
+        return self.json_response(str(line.get_value()))
+
+
+    async def set_state_old(self,request):
         """
             Relay set value
         """
@@ -81,6 +92,22 @@ class RelayController:
 
         try:
             value = int(request.match_info['state'])
+            assert(0 <= value <= 1)
+        except:
+            raise web.HTTPBadRequest(text="Invalid state, must be 0 or 1")
+
+        line.set_value(value)
+        return self.json_response({"status": "ok"})
+
+    async def set_state(self,request):
+        """
+            Relay set value
+        """
+        ident = request.match_info['relay']
+        line = self.lookup_line(ident)
+
+        try:
+            value = int(await request.content.read())
             assert(0 <= value <= 1)
         except:
             raise web.HTTPBadRequest(text="Invalid state, must be 0 or 1")
