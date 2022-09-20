@@ -83,7 +83,7 @@ API
 
 * **URL**
 
-  /relays/:id/state/<0,1>
+  /relays/:id/state
 
 * **Method:**
 
