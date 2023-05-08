@@ -1,6 +1,8 @@
 from aiohttp import web
 import json
 
+from gpiod.line import Value
+
 class RelayController:
     """
         RelayAPI Controller
@@ -10,7 +12,7 @@ class RelayController:
         self.line_count = len(lines)
         self.by_name = dict()
         for line in lines.values():
-            name = line.name()
+            name = line.name
             if name:
                 self.by_name[name] = line
 
@@ -36,8 +38,8 @@ class RelayController:
         """
         relays = []
         for ident,line in self.lines.items():
-            d = {'id': ident, 'state': str(line.get_value())}
-            name = line.name()
+            d = {'id': ident, 'state': str(line.request.get_values()[0].value)}
+            name = line.name
             if name:
                 d['name'] =  name
             relays.append(d)
@@ -57,7 +59,7 @@ class RelayController:
         ident = request.match_info['relay']
         line = self.lookup_line(ident)
 
-        value = line.get_value()
+        value = line.request.get_values()[0].value
         res = {"relay_id": ident,
                "status": str(value)}
         return self.json_response(res)
@@ -70,7 +72,7 @@ class RelayController:
         ident = request.match_info['relay']
         line = self.lookup_line(ident)
 
-        return self.json_response({"state": str(line.get_value())})
+        return self.json_response({"state": str(line.request.get_values()[0].value)})
 
     async def get_state(self,request):
         """
@@ -80,7 +82,7 @@ class RelayController:
         ident = request.match_info['relay']
         line = self.lookup_line(ident)
 
-        return self.json_response(str(line.get_value()))
+        return self.json_response(str(line.request.get_values()[0].value))
 
 
     async def set_state_old(self,request):
@@ -96,7 +98,7 @@ class RelayController:
         except:
             raise web.HTTPBadRequest(text="Invalid state, must be 0 or 1")
 
-        line.set_value(value)
+        line.request.set_values({line.offset: Value(value)})
         return self.json_response({"status": "ok"})
 
     async def set_state(self,request):
@@ -112,5 +114,5 @@ class RelayController:
         except:
             raise web.HTTPBadRequest(text="Invalid state, must be 0 or 1")
 
-        line.set_value(value)
+        line.request.set_values({line.offset: Value(value)})
         return self.json_response({"status": "ok"})
