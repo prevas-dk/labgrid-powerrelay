@@ -16,6 +16,8 @@ import asyncio
 import logging
 import click
 import errno
+import os
+from dataclasses import dataclass
 
 import trafaret_config as traf_cfg
 import trafaret as t
@@ -23,6 +25,10 @@ import trafaret as t
 from aiohttp import web
 
 import gpiod
+
+from gpiod.line import Direction, Value
+from gpiod.line_request import LineRequest
+from gpiod.chip import Chip
 
 from . import routes
 
@@ -64,6 +70,11 @@ class TrafaretYaml(click.Path):
             msg = "\n".join(str(err) for err in e.errors)
             self.fail("\n" + msg)
 
+@dataclass
+class RelayLine:
+    request: LineRequest
+    offset: int
+    name: str
 
 def validate_relays(relays):
     """
@@ -78,37 +89,24 @@ def validate_relays(relays):
             return (False, "Relay %s: must specify either GPIO name or chip name+line number" % ident)
     return (True, None)
 
-# Unfortunately, the python bindings for libgpiod have slightly
-# inconsistent way of reporting errors:
-#
-# - Looking up a line by name return None if there's no such line.
-#
-# - Looking up a non-existent chip raises ENOENT.
-#
-# - Asking for a non-existent line from a gpiod.Chip raises EINVAL.
-#
-# Try to normalize all these cases to ENOENT aka FileNotFoundError,
-# and put some reasonable stuff in the exception object's strerror.
-def cfg_to_line(cfg):
+# If the gpio name is set, we need to browse through all
+# gpiochip devices and (hopefully) find the device. For
+# unknown reasons, the ability "find_line" ability has been
+# removed in libgpiod 2.0.
+# If the chipname is set, it becomes quite easy, since we can
+# just use the chipname and offset directly
+def cfg_to_gpiochip_and_offset(cfg):
     if 'name' in cfg:
         name = cfg['name']
-        line = gpiod.find_line(name)
-        if not line:
-            raise FileNotFoundError(errno.ENOENT, "No such GPIO line", name)
+        for entry in os.scandir("/dev/"):
+            if gpiod.is_gpiochip_device(entry.path):
+                with gpiod.Chip(entry.path) as chip:
+                    offset = chip.line_offset_from_id(name)
+                    if offset is not None:
+                        return chip.get_info().name, offset
+        raise Exception("No such GPIO")
     else:
-        try:
-            chip = gpiod.Chip(cfg['chip'], gpiod.Chip.OPEN_LOOKUP)
-            line = chip.get_line(cfg['line'])
-        except FileNotFoundError as e:
-            e.strerror = "No such GPIO chip"
-            e.filename = cfg['chip']
-            raise e
-        except OSError as e:
-            if e.errno == errno.EINVAL:
-                raise FileNotFoundError(errno.ENOENT, "GPIO chip '%s' has no line %d" %
-                                        (cfg['chip'], cfg['line']))
-            raise e
-    return line
+        return cfg['chip'], cfg['line']
 
 # I'm tired of my terminal getting messed up when testing using 'curl -v -X GET ...'
 @web.middleware
@@ -161,16 +159,22 @@ def run(config):
         # setup gpio line instances
         lines = dict()
         for ident,cfg in relays.items():
-            line = cfg_to_line(cfg)
-            flags = 0
+            gpiochip, offset = cfg_to_gpiochip_and_offset(cfg)
             if cfg['active'] == 'low':
-                flags |= gpiod.LINE_REQ_FLAG_ACTIVE_LOW
-            line.request(consumer="PowerRelay", type=gpiod.LINE_REQ_DIR_OUT, flags=flags)
-            lines[ident] = line
+                active_low=True
+            else:
+                active_low=False
+            gpiochip_path = "/dev/" + gpiochip
+            request = gpiod.request_lines(gpiochip_path, consumer="PowerRelay", config={tuple([offset]): gpiod.LineSettings(direction=Direction.OUTPUT, active_low=active_low)})
+            chip = gpiod.Chip(gpiochip_path)
+            linename=""
+            if 'name' in cfg:
+                linename=cfg['name']
+            lines[ident] = RelayLine(request, offset, linename)
 
         # Only set the defaults when we've succesfully requested all lines.
         for ident in lines:
-            lines[ident].set_value(relays[ident]['default'])
+            lines[ident].request.set_values({lines[ident].offset: Value(relays[ident]['default'])})
 
         # setup routes
         routes.setup_routes(app, lines)
