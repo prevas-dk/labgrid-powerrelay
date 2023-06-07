@@ -101,7 +101,10 @@ def cfg_to_gpiochip_and_offset(cfg):
         for entry in os.scandir("/dev/"):
             if gpiod.is_gpiochip_device(entry.path):
                 with gpiod.Chip(entry.path) as chip:
-                    offset = chip.line_offset_from_id(name)
+                    try:
+                        offset = chip.line_offset_from_id(name)
+                    except:
+                        continue
                     if offset is not None:
                         return chip.get_info().name, offset
         raise Exception("No such GPIO")
