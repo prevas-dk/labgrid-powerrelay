@@ -17,14 +17,6 @@ requirements = [
     'trafaret>=0.12.0',
 ]
 
-setup_requirements = [
-    'pytest-runner>=3.0',
-]
-
-test_requirements = [
-    'pytest>=3.3.1',
-]
-
 setup(
     name='powerrelay',
     version='0.2.0',
@@ -52,8 +44,5 @@ setup(
         'Natural Language :: English',
         'Programming Language :: Python :: 3.5',
     ],
-    test_suite='tests',
-    tests_require=test_requirements,
-    setup_requires=setup_requirements,
     data_files=[('/etc/powerrelay/',['config.yaml'])],
 )

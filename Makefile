@@ -50,19 +50,6 @@ clean-test: ## remove test and coverage artifacts
 lint: ## check style with flake8
 	flake8 powerrelay tests
 
-test: ## run tests quickly with the default python3
-	python3 -m pytest
-
-
-test-all: ## run tests on every python3 version with tox
-	tox
-
-coverage: ## check code coverage quickly with the default python3
-	coverage run --source powerrelay -m pytest
-	coverage report -m
-	coverage html
-	$(BROWSER) htmlcov/index.html
-
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/powerrelay.rst
 	rm -f docs/modules.rst
