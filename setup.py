@@ -15,6 +15,7 @@ requirements = [
     'Click>=6.0',
     'aiohttp>=2.3.6',
     'trafaret>=0.12.0',
+    'gpiod>=2.2.4',
 ]
 
 setup(

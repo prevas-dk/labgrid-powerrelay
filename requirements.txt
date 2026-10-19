@@ -4,3 +4,4 @@ trafaret==1.2.0
 trafaret-config==2.0.2
 yarl==1.1.1
 multidict==4.1.0
+gpiod==2.2.4
